@@ -1,0 +1,29 @@
+Order For Provisioning Resources in Microsoft CSP
+In PRISM Portal this is the order of calls we make to provision resources in PRISM:
+Creating New PRISM Customer
+Check to see if the Address details are valid
+POST /api/v2/customers/validate
+Create the new PRISM Customer
+POST /api/v2/customers
+Creating New Microsoft CSP Tenant
+Check to see if the .onmicrosoft domain name is valid
+GET /api/v1/microsoftcsp/validate/domain/{domainprefix}
+Create a new Microsoft CSP Tenant
+POST /api/v2/microsoftcsp/tenants
+Add a new CSP Subscription to a Microsoft CSP Tenant
+Get a list of products that are able to be ordered for a particular subscription
+GET /api/v2/microsoftcsp/tenants/{tenantId}/products/available
+Order new subscription
+POST /api/v2/microsoftcsp/orders
+Add a new CSP Addon (e.g. Advanced Threat Protection) to a CSP Subscription
+Get a list of addons available for a particular subscription
+GET /api/v2/microsoftcsp/subscriptions/{subscriptionId}/addons/available
+Add Add-on
+POST /api/v2/microsoftcsp/orders/addons
+Make Changes to a Subscription
+Update subscription Qty
+POST /api/v2/microsoftcsp/subscriptions/{SubscriptionId}/quantity/{newQuantity}
+Suspend a subscription
+POST /api/v2/microsoftcsp/subscriptions/{SubscriptionId}/suspend
+Resume a subscription
+POST /api/v2/microsoftcsp/subscriptions/{SubscriptionId}/resume
