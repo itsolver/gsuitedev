@@ -40,6 +40,8 @@ $cname2value = $DkimSigningConfig.Selector2CNAME
 
 Write-Output $domain, $cname1, $cname1value, $cname2, $cname2value 
 
+# To do: check if correct CNAME records already exist
+
 # Cloudflare: create CNAME records
 # Retrieve Zone ID
 $params0 = @{
@@ -81,5 +83,6 @@ if ($CNAmeCreated -eq 'y' ) {
     Set-DkimSigningConfig -Identity $_ -Enabled $true
     }   
 }       
+# To do: catch errors
 
 Get-Variable -Exclude PWD,*Preference | Remove-Variable -EA 0
