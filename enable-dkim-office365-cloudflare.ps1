@@ -37,10 +37,7 @@ $cname1 = "selector1._domainkey.$domain"
 $cname1value = $DkimSigningConfig.Selector1CNAME
 $cname2 = "selector2._domainkey.$domain"
 $cname2value = $DkimSigningConfig.Selector2CNAME
-
-Write-Output $domain, $cname1, $cname1value, $cname2, $cname2value 
-
-# To do: check if correct CNAME records already exist
+# To do: if(!CNAME)
 
 # Cloudflare: create CNAME records
 # Retrieve Zone ID
@@ -56,7 +53,7 @@ $zoneId = $response.result.id
 # Create DNS records 
 $jsonBody1 = '{"content":"' + $cname1value + '","data":{},"name":"' + $cname1 + '","proxiable":true,"proxied":false,"ttl":1,"type":"CNAME","zone_id":"' + $zoneId + '","zone_name":"' + $domain + '"}'
 $jsonBody2 = '{"content":"' + $cname2value + '","data":{},"name":"' + $cname2 + '","proxiable":true,"proxied":false,"ttl":1,"type":"CNAME","zone_id":"' + $zoneId + '","zone_name":"' + $domain + '"}'
-Write-Output $jsonBody1, $jsonBody2
+
 $params1 = @{
   Uri         = "https://api.cloudflare.com/client/v4/zones/$zoneId/dns_records"
   Headers     = @{ 'Authorization' = "Bearer $CLOUDFLARE_API_KEY" }
@@ -78,10 +75,8 @@ Invoke-RestMethod @params2
 
 # Enable DKIM
 $EXOdomains | ForEach-Object {
-if ($CNAmeCreated -eq 'y' ) {
   Write-Host "Enabling DKIM for domain: $_ " -ForegroundColor Yellow
-    Set-DkimSigningConfig -Identity $_ -Enabled $true
-    }   
+    Set-DkimSigningConfig -Identity $_ -Enabled $true   
 }       
 # To do: catch errors
 
