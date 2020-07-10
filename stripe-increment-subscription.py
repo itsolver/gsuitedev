@@ -27,7 +27,8 @@ if 'items' in subscription:
         for items_data in subscription['items']['data']:
             if items_data['plan']['product'] in managed_products:
                 current_quantity = items_data['quantity']
-                print("Current subscription:", items_data['plan']['id'], current_quantity)
+                print("Current subscription:",
+                      items_data['plan']['id'], current_quantity)
             else:
                 print("found another product")
 
@@ -56,7 +57,6 @@ stripe.SubscriptionItem.modify(
 subscription = stripe.Subscription.retrieve(subscription_id)
 # Test subscription
 # subscription = stripe.Subscription.retrieve("sub_GOYvrswLOW34n2")
-#print(subscription)
 if 'items' in subscription:
     if 'data' in subscription['items']:
         print("Iterating subscription data")
