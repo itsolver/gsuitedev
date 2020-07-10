@@ -14,13 +14,13 @@ stripe.api_key = str(os.getenv("STRIPE_API_KEY"))
 subscription_id = str(os.getenv("SUBSCRIPTION_ID"))
 # END import secrets into variables
 
-managed_products = ['g-suite-business', 'g-suite-basic', 'g-suite-support-premium', 'g-suite-support-standard']
+managed_products = ['g-suite-business', 'g-suite-basic',
+                    'g-suite-support-premium', 'g-suite-support-standard', 'plan_HBd3WvBJgURtuX']
 
 # TAB subscription
 subscription = stripe.Subscription.retrieve(subscription_id)
 # Test subscription
 # subscription = stripe.Subscription.retrieve("sub_GOYvrswLOW34n2")
-#print(subscription)
 if 'items' in subscription:
     if 'data' in subscription['items']:
         print("Iterating subscription data")
@@ -63,6 +63,7 @@ if 'items' in subscription:
         for items_data in subscription['items']['data']:
             if items_data['plan']['product'] in managed_products:
                 current_quantity = items_data['quantity']
-                print("Subscription updated:", items_data['plan']['id'], current_quantity)
+                print("Subscription updated:",
+                      items_data['plan']['id'], current_quantity)
             else:
                 print("found another product")
