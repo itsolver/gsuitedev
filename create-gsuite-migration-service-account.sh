@@ -30,4 +30,4 @@ echo https://mail.google.com/, https://www.google.com/m8/feeds, https://www.goog
 echo Click Authorize.
 
 read -p 'Ready to continue?'
-echo "Go to your CloudMigrator or [MigrationWiz](https://migrationwiz.bittitan.com/app/projects) project and add ~/$serviceEmail-key.json to G Suite source/destination endpoint."
+echo "Go to your CloudMigrator or [MigrationWiz](https://migrationwiz.bittitan.com/app/projects) project and add ~/`$serviceEmail`-key.json to G Suite source/destination endpoint."
