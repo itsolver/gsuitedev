@@ -7,7 +7,8 @@ except ImportError:
 # START import secrets into variables
 import os
 from dotenv import load_dotenv
-load_dotenv()
+BASE_DIR = os.path.abspath(os.path.dirname(__file__))
+load_dotenv(dotenv_path=os.path.join(BASE_DIR, ".env"))
 
 stripe.api_key = os.getenv("STRIPE_API_KEY")
 subscription_id = os.getenv("SUBSCRIPTION_ID")
