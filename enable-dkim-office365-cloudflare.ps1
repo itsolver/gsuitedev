@@ -10,9 +10,45 @@ Get-Content .env | Where-Object {$_.length -gt 0} | Where-Object {!$_.StartsWith
 # Connect-ExchangeOnline -UserPrincipalName $UPN -ShowProgress $true
 
 # Accounts without MFA enabled:
-$password = $O365_ADMIN_PASS
-$secureStringPwd = $password | ConvertTo-SecureString -AsPlainText -Force 
-$UserCredential = New-Object System.Management.Automation.PSCredential -ArgumentList $O365_ADMIN_USER, $secureStringPwd
+import argparse
+parser = argparse.ArgumentParser()
+
+import argparse
+import sys
+
+def getOptions(args=sys.argv[1:]):
+  parser = argparse.ArgumentParser(description="Parses command.")
+  parser.add_argument('--user', help='o365 admin user')
+  parser.add_argument('--pass', help='o365 admin password')
+  parser.add_argument('--cfkey', help='cloudflare api key')
+  parser.add_argument('--manual', help='print cname records for user to manually add via domain management dashboard (cpanel/non-cloudflare)')
+  parser.add_argument("-v", "--verbose",dest='verbose',action='store_true', help="Verbose mode.")
+  options = parser.parse_args(args)
+  return options
+
+options = getOptions(sys.argv[1:])
+
+if options.verbose:
+    print("Verbose mode on")
+else:
+    print("Verbose mode off")
+
+if options.user && options.password:
+  $m365_user = options.user
+  $m365_pass = options.pass
+else: 
+  $m365_user = $O365_ADMIN_USER
+  $m365_pass = $O365_ADMIN_PASS
+
+if options.cfkey:
+  $cf_api_key = options.cfkey
+else: 
+  $cf_api_key = $CLOUDFLARE_API_KEY
+
+$secureStringPwd = $m365_pass | ConvertTo-SecureString -AsPlainText -Force 
+$UserCredential = New-Object System.Management.Automation.PSCredential -ArgumentList $m365_user, $secureStringPwd
+
+
 #$UserCredential = Get-Credential
 Connect-ExchangeOnline -Credential $UserCredential -ShowProgress $true
 
@@ -39,39 +75,48 @@ $cname2 = "selector2._domainkey.$domain"
 $cname2value = $DkimSigningConfig.Selector2CNAME
 # To do: if(!CNAME)
 
-# Cloudflare: create CNAME records
-# Retrieve Zone ID
-$params0 = @{
-Uri         = "https://api.cloudflare.com/client/v4/zones?name=$domain&status=active&page=1&per_page=20&order=status&direction=desc&match=all"
-Headers     = @{ 'Authorization' = "Bearer $CLOUDFLARE_API_KEY" }
-Method      = 'GET'
-ContentType = 'application/json'
-}
-$response = Invoke-RestMethod @params0
-$zoneId = $response.result.id
-
-# Create DNS records 
-$jsonBody1 = '{"content":"' + $cname1value + '","data":{},"name":"' + $cname1 + '","proxiable":true,"proxied":false,"ttl":1,"type":"CNAME","zone_id":"' + $zoneId + '","zone_name":"' + $domain + '"}'
-$jsonBody2 = '{"content":"' + $cname2value + '","data":{},"name":"' + $cname2 + '","proxiable":true,"proxied":false,"ttl":1,"type":"CNAME","zone_id":"' + $zoneId + '","zone_name":"' + $domain + '"}'
-
-$params1 = @{
-  Uri         = "https://api.cloudflare.com/client/v4/zones/$zoneId/dns_records"
-  Headers     = @{ 'Authorization' = "Bearer $CLOUDFLARE_API_KEY" }
-  Method      = 'POST'
-  Body        = $jsonBody1
+if options.manual:
+  print("Not with Cloudflare huh? That sucks. Please create the cname records manually:")
+  print($cname1)
+  print($cname1value)
+  print($cname2)
+  print($cname2value)
+else:
+  # Cloudflare: create CNAME records
+  # Retrieve Zone ID
+  $params0 = @{
+  Uri         = "https://api.cloudflare.com/client/v4/zones?name=$domain&status=active&page=1&per_page=20&order=status&direction=desc&match=all"
+  Headers     = @{ 'Authorization' = "Bearer $cf_api_key" }
+  Method      = 'GET'
   ContentType = 'application/json'
-}
+  }
+  $response = Invoke-RestMethod @params0
+  $zoneId = $response.result.id
 
-$params2 = @{
-  Uri         = "https://api.cloudflare.com/client/v4/zones/$zoneId/dns_records"
-  Headers     = @{ 'Authorization' = "Bearer $CLOUDFLARE_API_KEY" }
-  Method      = 'POST'
-  Body        = $jsonBody2
-  ContentType = 'application/json'
-}
+  # Create DNS records 
+  $jsonBody1 = '{"content":"' + $cname1value + '","data":{},"name":"' + $cname1 + '","proxiable":true,"proxied":false,"ttl":1,"type":"CNAME","zone_id":"' + $zoneId + '","zone_name":"' + $domain + '"}'
+  $jsonBody2 = '{"content":"' + $cname2value + '","data":{},"name":"' + $cname2 + '","proxiable":true,"proxied":false,"ttl":1,"type":"CNAME","zone_id":"' + $zoneId + '","zone_name":"' + $domain + '"}'
 
-Invoke-RestMethod @params1
-Invoke-RestMethod @params2
+  $params1 = @{
+    Uri         = "https://api.cloudflare.com/client/v4/zones/$zoneId/dns_records"
+    Headers     = @{ 'Authorization' = "Bearer $CLOUDFLARE_API_KEY" }
+    Method      = 'POST'
+    Body        = $jsonBody1
+    ContentType = 'application/json'
+  }
+
+  $params2 = @{
+    Uri         = "https://api.cloudflare.com/client/v4/zones/$zoneId/dns_records"
+    Headers     = @{ 'Authorization' = "Bearer $CLOUDFLARE_API_KEY" }
+    Method      = 'POST'
+    Body        = $jsonBody2
+    ContentType = 'application/json'
+  }
+  try: 
+    Invoke-RestMethod @params1
+    Invoke-RestMethod @params2
+  catch: 
+    print("Failed to create cname records in Cloudflare")
 
 # Enable DKIM
 $EXOdomains | ForEach-Object {
