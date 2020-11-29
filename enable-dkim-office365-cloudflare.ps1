@@ -11,24 +11,17 @@ Get-Content .env | Where-Object {$_.length -gt 0} | Where-Object {!$_.StartsWith
 
 # Accounts without MFA enabled:
 import argparse
-parser = argparse.ArgumentParser()
-
-import argparse
 import sys
 import dnspython as dns
 import dns.resolver
 
-def getOptions(args=sys.argv[1:]):
-  parser = argparse.ArgumentParser(description="Parses command.")
-  parser.add_argument('--user', help='o365 admin user')
-  parser.add_argument('--pass', help='o365 admin password')
-  parser.add_argument('--cfkey', help='cloudflare api key')
-  parser.add_argument('--manual', help='print cname records for user to manually add via domain management dashboard (cpanel/non-cloudflare)')
-  parser.add_argument("-v", "--verbose",dest='verbose',action='store_true', help="Verbose mode.")
-  options = parser.parse_args(args)
-  return options
-
-options = getOptions(sys.argv[1:])
+parser = argparse.ArgumentParser()
+parser.add_argument('--user', help='o365 admin user')
+parser.add_argument('--pass', help='o365 admin password')
+parser.add_argument('--cfkey', help='cloudflare api key')
+parser.add_argument('--manual', help='print cname records for user to manually add via domain management dashboard (cpanel/non-cloudflare)')
+parser.add_argument("-v", "--verbose",dest='verbose',action='store_true', help="Verbose mode.")
+parser.parse_args
 
 if options.verbose:
     print("Verbose mode on")
