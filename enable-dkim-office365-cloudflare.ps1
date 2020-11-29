@@ -117,7 +117,12 @@ $cname1 = "selector1._domainkey.$domain"
 $cname1value = $DkimSigningConfig.Selector1CNAME
 $cname2 = "selector2._domainkey.$domain"
 $cname2value = $DkimSigningConfig.Selector2CNAME
-# To do: if(!CNAME)
+
+# TODO: get name servers
+# test dig cname records
+# if ns == cloudflare and !test, create cname records in cloudflare
+# else if ns != cloudflare and !test, print cname records and loop ask user to create, if user answers Y then proceed to enable DKIM
+# else: proceed to enable dkim
 
 # Cloudflare: create CNAME records
 # Retrieve Zone ID
