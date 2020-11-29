@@ -45,7 +45,7 @@ new_quantity = current_quantity + 1
 # )
 # TAB subscription
 stripe.SubscriptionItem.modify(
-    "si_GOXT7HBES7O38Z",
+    "si_HtR12uRXcZGjMs",
     quantity=new_quantity,
 )
 stripe.SubscriptionItem.modify(

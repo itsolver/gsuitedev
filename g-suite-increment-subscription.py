@@ -1,7 +1,7 @@
 # TO DO: create custom gam python modules: https://groups.google.com/d/topic/google-apps-manager/SF7WaRqKBIk
 
 import subprocess
-newQuantity = ""
+newQuantity = "36"
 bashCommand = "export OAUTHFILE=oauth2.txt-itsolver.net; /Users/angusmclauchlan/bin/gam/gam update resoldsubscription thealternativeboard.com.au Google-Apps-Unlimited seats {} {}".format(
     newQuantity, newQuantity)
 process = subprocess.run(bashCommand, stdout=subprocess.PIPE,
