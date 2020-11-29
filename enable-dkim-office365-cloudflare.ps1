@@ -15,6 +15,8 @@ parser = argparse.ArgumentParser()
 
 import argparse
 import sys
+import dnspython as dns
+import dns.resolver
 
 def getOptions(args=sys.argv[1:]):
   parser = argparse.ArgumentParser(description="Parses command.")
@@ -67,8 +69,12 @@ if (!($dkimconfig)) {
 
 #Get DKIM info from the tenant
 Write-Host "Collecting Selector1 and Selector2 CNAME records from all domains" -ForegroundColor Yellow
-$DkimSigningConfig = Get-DkimSigningConfig 
-$domain = $DkimSigningConfig.domain
+$DkimSigningConfig = Get-DkimSigningConfig
+if options.domain:
+ $domain = options.domain
+else: 
+  $domain = $DkimSigningConfig.domain
+
 $cname1 = "selector1._domainkey.$domain"
 $cname1value = $DkimSigningConfig.Selector1CNAME
 $cname2 = "selector2._domainkey.$domain"
@@ -118,11 +124,34 @@ else:
   catch: 
     print("Failed to create cname records in Cloudflare")
 
-# Enable DKIM
-$EXOdomains | ForEach-Object {
-  Write-Host "Enabling DKIM for domain: $_ " -ForegroundColor Yellow
-    Set-DkimSigningConfig -Identity $_ -Enabled $true   
-}       
-# To do: catch errors
+for cnameval in result:
+    print ' cname target address:', cnameval.target
+
+# Verify cname records exist
+$check_cname1 = dns.resolver.query($cname1, 'CNAME')
+if $check_cname1 == $cname1value:
+  $cname_verified = true
+else: 
+  $cname_verifed = false
+  print("Incorrect cname1 value: " & $check_cname1)
+  print("Should be: " & $cname1value)
+
+$check_cname2 = dns.resolver.query($cname2, 'CNAME')
+if $check_cname2 == $cname2value:
+  $cname_verified = true
+else: 
+  $cname_verifed = false
+  print("Incorrect cname2 value: " & $check_cname2)
+  print("Should be: " & $cname2value)
+
+
+if $cname_verifed:
+  # Enable DKIM
+  $EXOdomains | ForEach-Object {
+    Write-Host "Enabling DKIM for domain: $_ " -ForegroundColor Yellow
+      Set-DkimSigningConfig -Identity $_ -Enabled $true   
+  }
+else: 
+  print("DKIM not enabled. Either cname records incorrect, or check credentials/domain in Microsoft 365 tenant.")
 
 Get-Variable -Exclude PWD,*Preference | Remove-Variable -EA 0
