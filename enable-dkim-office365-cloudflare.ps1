@@ -4,7 +4,7 @@ Param
    [switch]$Disconnect,
    [switch]$MFA,
    [string]$UserName, 
-   [SecureString]$Password
+   [string]$Password
 )
 
 # Get secrets from .env file
@@ -111,6 +111,7 @@ foreach ($domain in $EXOdomains){
   $cname1value = $DkimSigningConfig[$index].Selector1CNAME
   $cname2 = "selector2._domainkey.$domain"
   $cname2value = $DkimSigningConfig[$index].Selector2CNAME
+
   write-host "Microsoft wants these cname records to enable dkim: "  -ForegroundColor Yellow
   Write-Host $cname1, $cname1value
   Write-Host $cname2, $cname2value
@@ -124,6 +125,7 @@ foreach ($domain in $EXOdomains){
       $dnsRecord = Resolve-DnsName $domain -Server $ServerList -ErrorAction Stop -Type NS     
       $tempObj = "" | Select-Object Name,NameHost,Status,ErrorMessage 
       $tempObj.Name = $Name
+      write-host $dnsRecord.NameHost
       $tempObj.NameHost = ($dnsRecord.NameHost -join ',')
       if ($dnsRecord.NameHost -like '*.cloudflare.com*') {
         $tempObj.Status = 'ok_cloudflare'
@@ -160,10 +162,10 @@ foreach ($domain in $EXOdomains){
       $tempObj.Name = $Name
       $tempObj.NameHost =  ($dnsRecord.NameHost -join ',')
       if ($Name -eq $cname1 -And $dnsRecord.NameHost -eq $cname1value) {
-        $tempObj.Status = 'OK'
+        $tempObj.Status = 'CNAME_OK'
       }
       elseif ($Name -eq $cname2 -And $dnsRecord.NameHost -eq $cname2value) {
-        $tempObj.Status = 'OK'
+        $tempObj.Status = 'CNAME_OK'
       }
       else {
         $tempObj.Status = 'CNAME_NOT_OK'
@@ -255,17 +257,20 @@ foreach ($domain in $EXOdomains){
   }
   elseif ($CnameResult -like '*CNAME_NOT_OK*' -and $CloudflareNS -eq $false) {
     $msg = 'Name servers not with Cloudflare. Have you created the above cname records? [Y/N]'
-do {
-    $response = Read-Host -Prompt $msg
-    if ($response -eq 'n') {
-      write-host "Microsoft wants these cname records to enable dkim: "  -ForegroundColor Yellow
-      Write-Host $cname1, $cname1value
-      Write-Host $cname2, $cname2value
-    }
-} until ($response -eq 'y')
+    do {
+        $response = Read-Host -Prompt $msg
+        if ($response -eq 'n') {
+          write-host "Microsoft wants these cname records to enable dkim: "  -ForegroundColor Yellow
+          Write-Host $cname1, $cname1value
+          Write-Host $cname2, $cname2value
+        }
+    } until ($response -eq 'y')
+  }
+  elseif ($CnameResult -like '*CNAME_OK*'){
+    write-host "DKIM CNAME records exists ✅"
   }
 
-  if (($StatusCode -eq 200) -or ($cnameresult -like '*Status=OK*' ) -or ($response -eq 'y')){
+  if (($StatusCode -eq 200) -or ($cnameresult -like '*Status=CNAME_OK*' ) -or ($response -eq 'y')){
   try
   {
     $dkimconfig = Get-DkimSigningConfig -Identity $domain -ErrorAction SilentlyContinue
@@ -277,13 +282,11 @@ do {
     # Enable DKIM
       Write-Host "Enabling DKIM for domain: $domain " -ForegroundColor Yellow
         Set-DkimSigningConfig -Identity $domain -Enabled $true   
-    $StatusCode = $Response.StatusCode
   }
   catch
   {
     $StatusCode = $_.Exception.Response.StatusCode.value__
   }
-  $StatusCode
   }
   else {
     Write-Host "DKIM not enabled because " $domain " cname records not created. Try creating the above cname records then retry this script." -ForegroundColor Yellow
