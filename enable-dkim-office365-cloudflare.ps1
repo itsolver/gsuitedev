@@ -6,8 +6,6 @@ Param
    [string]$UserName, 
    [SecureString]$Password
 )
-# force MFA
-$MFA = $true
 
 # Get secrets from .env file
 Get-Content .env | Where-Object {$_.length -gt 0} | Where-Object {!$_.StartsWith("#")} | ForEach-Object {
