@@ -4,8 +4,10 @@ Param
    [switch]$Disconnect,
    [switch]$MFA,
    [string]$UserName, 
-   [string]$Password
+   [SecureString]$Password
 )
+# force MFA
+$MFA = $true
 
 # Get secrets from .env file
 Get-Content .env | Where-Object {$_.length -gt 0} | Where-Object {!$_.StartsWith("#")} | ForEach-Object {
@@ -25,11 +27,11 @@ if($Disconnect.IsPresent)
  Write-Host All sessions in the current window has been removed. -ForegroundColor Yellow
 }
 #Connect Exchnage Online with MFA
-elseif($MFA.IsPresent)
+elseif($MFA)
 {
  #Check for MFA mosule
  $MFAExchangeModule = ((Get-ChildItem -Path $($env:LOCALAPPDATA+"\Apps\2.0\") -Filter CreateExoPSSession.ps1 -Recurse ).FullName | Select-Object -Last 1)
- If ($MFAExchangeModule -eq $null)
+ If ($null -eq $MFAExchangeModule)
  {
   Write-Host  `nPlease install Exchange Online MFA Module.  -ForegroundColor yellow
   Write-Host You can install module using below blog : `nLink `nOR you can install module directly by entering "Y"`n
@@ -48,7 +50,7 @@ elseif($MFA.IsPresent)
   if($Confirmation -match "[yY]")
   {
    $MFAExchangeModule = ((Get-ChildItem -Path $($env:LOCALAPPDATA+"\Apps\2.0\") -Filter CreateExoPSSession.ps1 -Recurse ).FullName | Select-Object -Last 1)
-   If ($MFAExchangeModule -eq $null)
+   If ($null -eq $MFAExchangeModule)
    {
     Write-Host Exchange Online MFA module is not available -ForegroundColor red
     Exit
@@ -63,7 +65,7 @@ elseif($MFA.IsPresent)
  }
  
  #Importing Exchange MFA Module
- write-host aaaa
+ write-host
  . "$MFAExchangeModule"
  Connect-EXOPSSession -WarningAction SilentlyContinue | Out-Null
 }
@@ -85,131 +87,206 @@ else
 }
 
 #Check for connectivity
- if(!($Disconnect.IsPresent)){
-If ((Get-PSSession | Where-Object { $_.ConfigurationName -like "*Exchange*" }) -ne $null)
-{
- Write-Host `nSuccessfully connected to Exchange Online
+if(!($Disconnect.IsPresent)){
+  If ((Get-PSSession | Where-Object { $_.ConfigurationName -like "*Exchange*" }) -ne $null)
+  {
+   Write-Host `nSuccessfully connected to Exchange Online
+  Write-Host "Getting list of all custom domains" -ForegroundColor Yellow
+  $DkimSigningConfig = Get-DkimSigningConfig
+  $EXOdomains = (Get-DkimSigningConfig).name 
+  Write-Host $EXOdomains
+
+# Get list of domains to check dkim records
+Write-Host "Collecting Selector1 and Selector2 CNAME records from all domains" -ForegroundColor Yellow
+$counter = 0
+foreach ($domain in $EXOdomains){
+  ++$counter
+  write-host "Working on this domain: "  -ForegroundColor Yellow
+  write-host $domain
+  if ($domain -Like '*.onmicrosoft.com') {
+    write-host "Skipping initial domain"
+    continue
+  }
+  # Check CNAME and NS records, if with cloudflare, create cname records otherwise get user to do manually, then enable DKIM.
+  $index = $EXOdomains.IndexOf($domain)
+  $cname1 = "selector1._domainkey.$domain"
+  $cname1value = $DkimSigningConfig[$index].Selector1CNAME
+  $cname2 = "selector2._domainkey.$domain"
+  $cname2value = $DkimSigningConfig[$index].Selector2CNAME
+  write-host "Microsoft wants these cname records to enable dkim: "  -ForegroundColor Yellow
+  Write-Host $cname1, $cname1value
+  Write-Host $cname2, $cname2value
+
+  # get name servers
+
+  $ServerList = @('1.1.1.1','8.8.8.8')
+  $NsResult = @()   
+  try {        
+      write-host "Checking name servers: "  -ForegroundColor Yellow
+      $dnsRecord = Resolve-DnsName $domain -Server $ServerList -ErrorAction Stop -Type NS     
+      $tempObj = "" | Select-Object Name,NameHost,Status,ErrorMessage 
+      $tempObj.Name = $Name
+      $tempObj.NameHost = ($dnsRecord.NameHost -join ',')
+      if ($dnsRecord.NameHost -like '*.cloudflare.com*') {
+        $tempObj.Status = 'ok_cloudflare'
+      }
+      else {
+        $tempObj.Status = 'ok_not_cloudflare'
+      }
+      
+      $tempObj.ErrorMessage = ''       
+  }    
+  catch {        
+      $tempObj.Name = $Name        
+      $tempObj.NameHost = ''        
+      $tempObj.Status = 'NOT_OK'        
+      $tempObj.ErrorMessage = $_.Exception.Message    
+  }    
+  $NsResult = $tempObj
+  
+  $NsResult
+  if ($NsResult -like '*ok_cloudflare*') {
+    $CloudflareNS = $true
+  }
+  elseif ($NsResult -like '*ok_not_cloudflare*') {
+    $CloudflareNS = $false
+  }
+    
+  # get cname records
+  $NameList = @($cname1, $cname2)
+  $CnameResult = @()
+  foreach ($Name in $NameList) {    
+      $tempObj = "" | Select-Object Name,NameHost,Status,ErrorMessage    
+  try {        
+      $dnsRecord = Resolve-DnsName $Name -Server $ServerList -ErrorAction Stop -Type CNAME     
+      $tempObj.Name = $Name
+      $tempObj.NameHost =  ($dnsRecord.NameHost -join ',')
+      if ($Name -eq $cname1 -And $dnsRecord.NameHost -eq $cname1value) {
+        $tempObj.Status = 'OK'
+      }
+      elseif ($Name -eq $cname2 -And $dnsRecord.NameHost -eq $cname2value) {
+        $tempObj.Status = 'OK'
+      }
+      else {
+        $tempObj.Status = 'CNAME_NOT_OK'
+      }
+      
+      $tempObj.ErrorMessage = ''       
+  }    
+  catch {        
+      $tempObj.Name = $Name        
+      $tempObj.NameHost = ''        
+      $tempObj.Status = 'CNAME_NOT_OK'        
+      $tempObj.ErrorMessage = $_.Exception.Message    
+  }    
+  $CnameResult += $tempObj
+  }
+  write-host "Checking if cname records exist: "  -ForegroundColor Yellow
+  Write-Host $CnameResult
+
+  if ($CnameResult -like '*CNAME_NOT_OK*' -and $CloudflareNS) { # if cname records not ok and ns == cloudflare, create cname records in cloudflare
+    Remove-Variable $CnameResult
+    # Cloudflare: create CNAME records
+    # Retrieve Zone ID
+    $params0 = @{
+      Uri         = "https://api.cloudflare.com/client/v4/zones?name=$domain&status=active&page=1&per_page=20&order=status&direction=desc&match=all"
+      Headers     = @{ 'Authorization' = "Bearer $CLOUDFLARE_API_KEY" }
+      Method      = 'GET'
+      ContentType = 'application/json'
+      }
+      
+      try
+      {
+      $response = Invoke-RestMethod @params0
+      $zoneId = $response.result.id
+      $StatusCode = $Response.StatusCode
+      }
+      catch
+      {
+      $StatusCode = $_.Exception.Response.StatusCode.value__
+      $ExceptionResponse = $_.Exception.Response
+      }
+      $StatusCode
+      $ExceptionResponse
+      
+      
+      # Create DNS records 
+      $jsonBody1 = '{"content":"' + $cname1value + '","data":{},"name":"' + $cname1 + '","proxiable":true,"proxied":false,"ttl":1,"type":"CNAME","zone_id":"' + $zoneId + '","zone_name":"' + $domain + '"}'
+      $jsonBody2 = '{"content":"' + $cname2value + '","data":{},"name":"' + $cname2 + '","proxiable":true,"proxied":false,"ttl":1,"type":"CNAME","zone_id":"' + $zoneId + '","zone_name":"' + $domain + '"}'
+      
+      $params1 = @{
+      Uri         = "https://api.cloudflare.com/client/v4/zones/$zoneId/dns_records"
+      Headers     = @{ 'Authorization' = "Bearer $CLOUDFLARE_API_KEY" }
+      Method      = 'POST'
+      Body        = $jsonBody1
+      ContentType = 'application/json'
+      }
+      
+      $params2 = @{
+      Uri         = "https://api.cloudflare.com/client/v4/zones/$zoneId/dns_records"
+      Headers     = @{ 'Authorization' = "Bearer $CLOUDFLARE_API_KEY" }
+      Method      = 'POST'
+      Body        = $jsonBody2
+      ContentType = 'application/json'
+      }
+      
+      try
+      {
+      Invoke-RestMethod @params1
+      $StatusCode = $Response.StatusCode
+      $StatusCode
+      }
+      catch
+      {
+      $StatusCode = $_.Exception.Response.StatusCode.value__
+      $StatusCode
+      }
+      
+      try
+      {
+      Invoke-RestMethod @params2
+      $StatusCode = $Response.StatusCode
+      $StatusCode
+      }
+      catch
+      {
+      $StatusCode = $_.Exception.Response.StatusCode.value__
+      $StatusCode
+      }
+      
+  }
+# TODO: else if ns != cloudflare and !test, print cname records and loop ask user to create, if user answers Y then proceed to enable DKIM
+# TODO: else: proceed to enable dkim
+
+
+
+  if (($StatusCode -eq 200) -or ($cnameresult -like '*Status=OK*' )){ # TODO: add OR condition if cname tested true
+  try
+  {
+    $dkimconfig = Get-DkimSigningConfig -Identity $domain -ErrorAction SilentlyContinue
+    if (!($dkimconfig)) {
+      Write-Host "Adding domain: $domain to DKIM Signing Configuration..." : $domain -ForegroundColor Yellow
+        New-DkimSigningConfig -DomainName $domain -Enabled $false
+        }          
+      
+    # Enable DKIM
+      Write-Host "Enabling DKIM for domain: $domain " -ForegroundColor Yellow
+        Set-DkimSigningConfig -Identity $domain -Enabled $true   
+    $StatusCode = $Response.StatusCode
+  }
+  catch
+  {
+    $StatusCode = $_.Exception.Response.StatusCode.value__
+  }
+  $StatusCode
+  }
+  else {
+    Write-Host "DKIM not enabled because " $domain " cname records not created. Try creating the above cname records then retry this script." -ForegroundColor Yellow
+  }
+}
+
 }
 else
 {
- Write-Host `nUnable to connect to Exchange Online. Error occurred -ForegroundColor Red
+ Write-Host "Unable to connect to Exchange Online. Perhaps try -MFA switch." -ForegroundColor Red
 }}
-
-
-Write-Host "Getting list of all custom domains" -ForegroundColor Yellow
-$EXOdomains = (Get-AcceptedDomain | Where-Object { $_.name -NotLike '*.onmicrosoft.com'}).name 
-  
-$EXOdomains | ForEach-Object {
-
-$dkimconfig = Get-DkimSigningConfig -Identity $_ -ErrorAction SilentlyContinue
-
-if (!($dkimconfig)) {
-   Write-Host "Adding domain: $_ to DKIM Signing Configuration..." : $_ -ForegroundColor Yellow
-     New-DkimSigningConfig -DomainName $_ -Enabled $false
-     }          
- }
-
-#Get DKIM info from the tenant
-Write-Host "Collecting Selector1 and Selector2 CNAME records from all domains" -ForegroundColor Yellow
-$DkimSigningConfig = Get-DkimSigningConfig 
-$domain = $DkimSigningConfig.domain
-$cname1 = "selector1._domainkey.$domain"
-$cname1value = $DkimSigningConfig.Selector1CNAME
-$cname2 = "selector2._domainkey.$domain"
-$cname2value = $DkimSigningConfig.Selector2CNAME
-
-# TODO: get name servers
-# test dig cname records
-# if ns == cloudflare and !test, create cname records in cloudflare
-# else if ns != cloudflare and !test, print cname records and loop ask user to create, if user answers Y then proceed to enable DKIM
-# else: proceed to enable dkim
-
-# Cloudflare: create CNAME records
-# Retrieve Zone ID
-$params0 = @{
-Uri         = "https://api.cloudflare.com/client/v4/zones?name=$domain&status=active&page=1&per_page=20&order=status&direction=desc&match=all"
-Headers     = @{ 'Authorization' = "Bearer $CLOUDFLARE_API_KEY" }
-Method      = 'GET'
-ContentType = 'application/json'
-}
-
-try
-{
- $response = Invoke-RestMethod @params0
- $zoneId = $response.result.id
- $StatusCode = $Response.StatusCode
-}
-catch
-{
- $StatusCode = $_.Exception.Response.StatusCode.value__
-}
-$StatusCode
-
-
-# Create DNS records 
-$jsonBody1 = '{"content":"' + $cname1value + '","data":{},"name":"' + $cname1 + '","proxiable":true,"proxied":false,"ttl":1,"type":"CNAME","zone_id":"' + $zoneId + '","zone_name":"' + $domain + '"}'
-$jsonBody2 = '{"content":"' + $cname2value + '","data":{},"name":"' + $cname2 + '","proxiable":true,"proxied":false,"ttl":1,"type":"CNAME","zone_id":"' + $zoneId + '","zone_name":"' + $domain + '"}'
-
-$params1 = @{
- Uri         = "https://api.cloudflare.com/client/v4/zones/$zoneId/dns_records"
- Headers     = @{ 'Authorization' = "Bearer $CLOUDFLARE_API_KEY" }
- Method      = 'POST'
- Body        = $jsonBody1
- ContentType = 'application/json'
-}
-
-$params2 = @{
- Uri         = "https://api.cloudflare.com/client/v4/zones/$zoneId/dns_records"
- Headers     = @{ 'Authorization' = "Bearer $CLOUDFLARE_API_KEY" }
- Method      = 'POST'
- Body        = $jsonBody2
- ContentType = 'application/json'
-}
-
-try
-{
- Invoke-RestMethod @params1
- $StatusCode = $Response.StatusCode
-}
-catch
-{
- $StatusCode = $_.Exception.Response.StatusCode.value__
-}
-$StatusCode
-
-try
-{
- Invoke-RestMethod @params2
- $StatusCode = $Response.StatusCode
-}
-catch
-{
- $StatusCode = $_.Exception.Response.StatusCode.value__
-}
-$StatusCode
-
-if ($StatusCode -eq 200){
- try
- {
-   # Enable DKIM
-   $EXOdomains | ForEach-Object {
-     Write-Host "Enabling DKIM for domain: $_ " -ForegroundColor Yellow
-       Set-DkimSigningConfig -Identity $_ -Enabled $true   
-   }     
-   $StatusCode = $Response.StatusCode
- }
- catch
- {
-   $StatusCode = $_.Exception.Response.StatusCode.value__
- }
- $StatusCode
- }
- else {
-   Write-Host "DKIM not enabled because domains not setup in Cloudflare" -ForegroundColor Yellow
- }
-
-# Close remote shells
-if ($ExoSession) { Remove-PSSession -Session $ExoSession -ErrorAction SilentlyContinue }
-
-# Clean up variables
-Get-Variable -Exclude PWD,*Preference | Remove-Variable -EA 0
