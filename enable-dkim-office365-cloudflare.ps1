@@ -255,12 +255,19 @@ foreach ($domain in $EXOdomains){
       }
       
   }
-# TODO: else if ns != cloudflare and !test, print cname records and loop ask user to create, if user answers Y then proceed to enable DKIM
-# TODO: else: proceed to enable dkim
+  elseif ($CnameResult -like '*CNAME_NOT_OK*' -and $CloudflareNS -eq $false) {
+    $msg = 'Name servers not with Cloudflare. Have you created the above cname records? [Y/N]'
+do {
+    $response = Read-Host -Prompt $msg
+    if ($response -eq 'n') {
+      write-host "Microsoft wants these cname records to enable dkim: "  -ForegroundColor Yellow
+      Write-Host $cname1, $cname1value
+      Write-Host $cname2, $cname2value
+    }
+} until ($response -eq 'y')
+  }
 
-
-
-  if (($StatusCode -eq 200) -or ($cnameresult -like '*Status=OK*' )){ # TODO: add OR condition if cname tested true
+  if (($StatusCode -eq 200) -or ($cnameresult -like '*Status=OK*' ) -or ($response -eq 'y')){
   try
   {
     $dkimconfig = Get-DkimSigningConfig -Identity $domain -ErrorAction SilentlyContinue
