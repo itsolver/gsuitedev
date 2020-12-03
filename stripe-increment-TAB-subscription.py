@@ -17,20 +17,16 @@ subscription_id = str(os.getenv("SUBSCRIPTION_ID"))
 managed_products = ['g-suite-business', 'g-suite-basic',
                     'g-suite-support-premium', 'g-suite-support-standard', 'plan_HBd3WvBJgURtuX']
 
-# TAB subscription
+# Get TAB subscription quantity
 subscription = stripe.Subscription.retrieve(subscription_id)
-# Test subscription
-# subscription = stripe.Subscription.retrieve("sub_GOYvrswLOW34n2")
+# subscription = stripe.Subscription.retrieve("sub_GOYvrswLOW34n2") # Test subscription
 if 'items' in subscription:
     if 'data' in subscription['items']:
-        print("Iterating subscription data")
         for items_data in subscription['items']['data']:
             if items_data['plan']['product'] in managed_products:
                 current_quantity = items_data['quantity']
                 print("Current subscription:",
                       items_data['plan']['id'], current_quantity)
-            else:
-                print("found another product")
 
 new_quantity = current_quantity + 1
 
@@ -43,27 +39,25 @@ new_quantity = current_quantity + 1
 #   "si_GOYygLNHq7ZErJ",
 #   quantity=new_quantity,
 # )
+
 # TAB subscription
 stripe.SubscriptionItem.modify(
-    "si_HtR12uRXcZGjMs",
+    "si_HtR12uRXcZGjMs", # Support Plan
+
     quantity=new_quantity,
 )
 stripe.SubscriptionItem.modify(
-    "si_HHt2geladICiD3",
+    "si_HHt2geladICiD3", # G Suite Business
     quantity=new_quantity,
 )
 
-# TAB subscription
+# Update TAB subscription quantity
+#subscription = stripe.Subscription.retrieve("sub_GOYvrswLOW34n2") # Test subscription
 subscription = stripe.Subscription.retrieve(subscription_id)
-# Test subscription
-# subscription = stripe.Subscription.retrieve("sub_GOYvrswLOW34n2")
 if 'items' in subscription:
     if 'data' in subscription['items']:
-        print("Iterating subscription data")
         for items_data in subscription['items']['data']:
             if items_data['plan']['product'] in managed_products:
                 current_quantity = items_data['quantity']
-                print("Subscription updated:",
+                print("Updated subscription quantity:",
                       items_data['plan']['id'], current_quantity)
-            else:
-                print("found another product")
