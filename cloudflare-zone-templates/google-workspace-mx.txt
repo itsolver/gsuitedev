@@ -1,0 +1,19 @@
+;; G Suite - https://gsuite.google.com/
+
+;; Adds G Suite MX records
+;; Documentation
+;; https://support.google.com/a/answer/140034
+
+;; Adds the default G Suite SPF as a TXT record.
+;; Documentation
+;; https://support.google.com/a/answer/33786
+
+;; MX Records
+@	1	IN	MX	10 alt4.aspmx.l.google.com.
+@	1	IN	MX	10 alt3.aspmx.l.google.com.
+@	1	IN	MX	5 alt2.aspmx.l.google.com.
+@	1	IN	MX	5 alt1.aspmx.l.google.com.
+@	1	IN	MX	1 aspmx.l.google.com.
+
+;; TXT Records
+@	1	IN	TXT	"v=spf1 include:_spf.google.com ~all"
