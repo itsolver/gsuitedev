@@ -1,3 +1,4 @@
 .env
 prismportal-access-token.json
 prismportal-customers-create.json
+.DS_Store
